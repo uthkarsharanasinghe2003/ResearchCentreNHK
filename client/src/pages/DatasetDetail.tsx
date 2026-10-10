@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   getDatasetById,
+  updateDataset,
+  deleteDataset,
   SAMPLE_DATASETS,
   type DatasetDetail as IDatasetDetail,
   type BarChartDataPoint,
@@ -11,10 +13,19 @@ import DatasetBarChart from '../components/DatasetBarChart';
 
 export const DatasetDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [dataset, setDataset] = useState<IDatasetDetail | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'charts' | 'preview'>('overview');
+
+  // Edit and Delete state
+  const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [editName, setEditName] = useState<string>('');
+  const [editDescription, setEditDescription] = useState<string>('');
+  const [saving, setSaving] = useState<boolean>(false);
+  const [deleting, setDeleting] = useState<boolean>(false);
+  const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
     const fetchDataset = async () => {
@@ -60,6 +71,66 @@ export const DatasetDetail: React.FC = () => {
       month: 'long',
       day: 'numeric',
     });
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id || !dataset) return;
+    if (!editName.trim()) {
+      setActionFeedback({ type: 'error', message: 'Dataset name cannot be empty.' });
+      return;
+    }
+
+    setSaving(true);
+    setActionFeedback(null);
+    try {
+      await updateDataset(id, {
+        name: editName.trim(),
+        description: editDescription.trim(),
+      });
+      setDataset((prev) =>
+        prev
+          ? {
+              ...prev,
+              name: editName.trim(),
+              description: editDescription.trim(),
+            }
+          : prev
+      );
+      setIsEditing(false);
+      setActionFeedback({ type: 'success', message: 'Dataset details updated successfully!' });
+    } catch (err: any) {
+      setActionFeedback({
+        type: 'error',
+        message: err.response?.data?.message || err.message || 'Failed to update dataset.',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id || !dataset) return;
+    const confirmed = window.confirm(
+      `Are you sure you want to permanently delete "${dataset.name}"? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setActionFeedback(null);
+    try {
+      await deleteDataset(id);
+      setActionFeedback({ type: 'success', message: 'Dataset deleted successfully! Redirecting to dashboard...' });
+      setTimeout(() => {
+        navigate('/');
+      }, 1000);
+    } catch (err: any) {
+      setActionFeedback({
+        type: 'error',
+        message: err.response?.data?.message || err.message || 'Failed to delete dataset.',
+      });
+      setDeleting(false);
+    }
   };
 
   // Helper to extract chart data for a given column name
@@ -157,24 +228,142 @@ export const DatasetDetail: React.FC = () => {
       <div className="detail-header-card">
         <div className="detail-title-row">
           <h1 className="detail-title">{dataset.name}</h1>
-          <Link to="/upload" className="btn btn-outline btn-sm">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <button
+              onClick={() => {
+                setEditName(dataset.name);
+                setEditDescription(dataset.description || '');
+                setIsEditing((prev) => !prev);
+                setActionFeedback(null);
+              }}
+              className="btn btn-outline btn-sm"
+              title="Edit dataset name and description"
             >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            Upload Another
-          </Link>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              </svg>
+              {isEditing ? 'Cancel Edit' : 'Edit'}
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="btn btn-outline-danger btn-sm"
+              title="Permanently delete this dataset"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                <line x1="10" y1="11" x2="10" y2="17" />
+                <line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+            <Link to="/upload" className="btn btn-outline btn-sm">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              Upload Another
+            </Link>
+          </div>
         </div>
+
+        {/* Action feedback message */}
+        {actionFeedback && (
+          <div
+            className={`alert alert-${actionFeedback.type === 'success' ? 'info' : 'danger'}`}
+            style={{ marginTop: '0.75rem', marginBottom: '0.5rem' }}
+          >
+            {actionFeedback.message}
+          </div>
+        )}
+
+        {/* Inline Edit Form */}
+        {isEditing && (
+          <form
+            onSubmit={handleSaveEdit}
+            style={{
+              marginTop: '1rem',
+              marginBottom: '1rem',
+              padding: '1.25rem',
+              backgroundColor: '#f8fafc',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
+            }}
+          >
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '0.75rem', color: '#1e293b' }}>
+              Edit Dataset Information
+            </h3>
+            <div style={{ marginBottom: '0.75rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.25rem', color: '#475569' }}>
+                Dataset Name *
+              </label>
+              <input
+                type="text"
+                className="search-input"
+                style={{ width: '100%', padding: '0.5rem 0.75rem' }}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Dataset name"
+                required
+              />
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500, marginBottom: '0.25rem', color: '#475569' }}>
+                Description
+              </label>
+              <textarea
+                className="search-input"
+                style={{ width: '100%', minHeight: '65px', padding: '0.5rem 0.75rem', resize: 'vertical' }}
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                placeholder="Enter description or research context..."
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button type="submit" disabled={saving} className="btn btn-primary btn-sm">
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                disabled={saving}
+                className="btn btn-secondary btn-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
 
         <div className="detail-badges">
           <span className="badge badge-blue">Excel (.xlsx)</span>

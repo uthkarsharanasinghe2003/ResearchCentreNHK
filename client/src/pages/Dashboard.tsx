@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   getDatasets,
+  deleteDataset,
   SAMPLE_DATASETS,
   type DatasetListItem,
 } from '../api/datasetApi';
@@ -12,6 +13,17 @@ export const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [usingSampleData, setUsingSampleData] = useState<boolean>(false);
+
+  const handleDeleteDataset = async (id: string | number, name: string) => {
+    const confirmed = window.confirm(`Are you sure you want to permanently delete "${name}"?`);
+    if (!confirmed) return;
+    try {
+      await deleteDataset(id);
+      setDatasets((prev) => prev.filter((d) => String(d.id) !== String(id)));
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Failed to delete dataset.');
+    }
+  };
 
   const fetchDatasets = async () => {
     setLoading(true);
@@ -355,11 +367,11 @@ export const Dashboard: React.FC = () => {
                 </div>
               )}
 
-              <div style={{ marginTop: 'auto' }}>
+              <div style={{ marginTop: 'auto', display: 'flex', gap: '0.5rem' }}>
                 <Link
                   to={`/datasets/${dataset.id}`}
                   className="btn btn-secondary"
-                  style={{ width: '100%', justifyContent: 'center' }}
+                  style={{ flex: 1, justifyContent: 'center' }}
                 >
                   <span>View Statistics & Charts</span>
                   <svg
@@ -375,6 +387,27 @@ export const Dashboard: React.FC = () => {
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteDataset(dataset.id, dataset.name)}
+                  className="btn btn-outline-danger btn-sm"
+                  style={{ padding: '0 0.65rem' }}
+                  title="Delete dataset"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
               </div>
             </div>
           ))}

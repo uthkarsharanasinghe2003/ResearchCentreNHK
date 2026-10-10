@@ -2,3 +2,19 @@
 @import './layout.css';
 @import './components.css';
 @import './pages.css';
+body {
+  margin: 0;
+  background-image:
+    linear-gradient(rgba(10, 20, 40, 0.75), rgba(10, 20, 40, 0.75)),
+    url('/background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  min-height: 100vh;
+  .card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+}

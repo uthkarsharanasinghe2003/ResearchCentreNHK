@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Base API URL configured via .env (VITE_API_BASE_URL)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 // Axios instance configured with base URL
 export const apiClient = axios.create({
@@ -119,6 +119,31 @@ export const uploadDataset = async (
 
   return response.data;
 };
+
+/**
+ * PUT /api/v1/datasets/:id
+ * Updates an existing dataset's name and description.
+ */
+export const updateDataset = async (
+  id: string | number,
+  payload: { name: string; description?: string }
+): Promise<any> => {
+  const response = await apiClient.put(`/api/v1/datasets/${id}`, payload);
+  const resData = response.data;
+  return resData?.data ?? resData;
+};
+
+/**
+ * DELETE /api/v1/datasets/:id
+ * Deletes a dataset by ID.
+ */
+export const deleteDataset = async (
+  id: string | number
+): Promise<{ message?: string; id?: string }> => {
+  const response = await apiClient.delete(`/api/v1/datasets/${id}`);
+  return response.data;
+};
+
 
 // Mock/Sample datasets for preview when the backend is offline/not yet launched
 export const SAMPLE_DATASETS: DatasetDetail[] = [
