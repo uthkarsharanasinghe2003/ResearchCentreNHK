@@ -1,53 +1,53 @@
-import { UserType } from '../api/users/user.model';
-import * as app from 'firebase-admin'
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import sharp from 'sharp';
+import fs from 'fs';
+import path from 'path';
+import { UserType } from '../api/users/user.model';
 
-export const createUser = async (email: string, password: string, name: string, userType: UserType = UserType.USER) => {
-    const user = await app.auth().createUser({
-        email: email,
-        emailVerified: true,
-        password: password,
-        displayName: name,
-        disabled: false,
-    });
+const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-in-production';
+const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
 
-    if(user) {
-        const claims = userType === UserType.ADMIN ? { admin: true } :  { user: true }
-        await app.auth().setCustomUserClaims(user.uid, claims)
-    }
-
-    return user?.uid;
+// Ensure uploads directory exists
+if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
-export const uploadFile = async (fileName: string, base64Data: string, contentType: string = 'image/webp') => {
-    const bucket = app.storage().bucket();
+export const createUser = async (email: string, password: string, name: string, userType: UserType = UserType.USER): Promise<string> => {
+    // Return a generated uid (mongo will store the actual _id, but we return a placeholder)
+    // The uid field will be set to the mongo _id after saving — handled in user.service.ts
+    return `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
 
-    const file = bucket.file(fileName);
-    const fileBuffer = await imageToWebp(base64Data);
+export const hashPassword = async (password: string): Promise<string> => {
+    return bcrypt.hash(password, 10);
+};
 
-    if(fileBuffer) {
-        await file.save(fileBuffer, {
-            metadata: {
-              contentType
-            }
-        });
-        return fileName;
-    }
-    
-}
+export const comparePassword = async (password: string, hash: string): Promise<boolean> => {
+    return bcrypt.compare(password, hash);
+};
 
-const imageToWebp = async (base64: string) => {
-    const imageBuffer = Buffer.from(base64.replace(/^data:image\/\w+;base64,/, ""), 'base64');
+export const generateToken = (payload: object): string => {
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+};
+
+export const verifyToken = (token: string): any => {
+    return jwt.verify(token, JWT_SECRET);
+};
+
+export const uploadFile = async (fileName: string, base64Data: string, contentType: string = 'image/webp'): Promise<string> => {
+    const safeFileName = fileName.replace(/\//g, '_') + '.webp';
+    const filePath = path.join(UPLOADS_DIR, safeFileName);
+
+    const imageBuffer = Buffer.from(base64Data.replace(/^data:image\/\w+;base64,/, ''), 'base64');
     const buffer = await sharp(imageBuffer).resize(400).webp({ quality: 80 }).toBuffer();
-    return buffer;
-}
 
-export const getImageUrl = async (path: string) => {
-    const bucket = app.storage().bucket();
-    const file = bucket.file(path);
-    const signedUrl = await file.getSignedUrl({
-        action: 'read',
-        expires: '03-01-2500'
-    });
-    return signedUrl[0];
+    fs.writeFileSync(filePath, buffer);
+    return safeFileName;
+};
+
+export const getImageUrl = async (fileName: string): Promise<string> => {
+    // Return a local server URL to serve the file
+    const baseUrl = process.env.SERVER_BASE_URL || 'http://localhost:3000';
+    return `${baseUrl}/uploads/${fileName}`;
 };

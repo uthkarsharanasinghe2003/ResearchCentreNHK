@@ -41,10 +41,11 @@ const userchema = new Schema<IUser>({
     userType: { type: String, enum: UserType, default: UserType.USER },
     appId: [{ type: String, enum: AppId, default: AppId.BIOM }],
     uid: { type: String },
+    password: { type: String, select: false },
 }, {
     timestamps: true
 });
 
 const User = model<IUser>('user', userchema, 'user');
 
-export default User
+export default User

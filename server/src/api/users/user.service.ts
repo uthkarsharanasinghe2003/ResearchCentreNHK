@@ -1,21 +1,48 @@
-import * as FirebaseService from "../../shared/firebase.service";
+import { comparePassword, generateToken, hashPassword } from "../../shared/firebase.service";
 import User, { AppId, IUser, IUserDTO, IUserFilterParams } from "./user.model";
 
 export const createUser = async (json: IUserDTO) => {
     try {
-        if((json.appId?.length ?? 0)=== 0) {
-            json.appId = [AppId.BIOM]
+        if ((json.appId?.length ?? 0) === 0) {
+            json.appId = [AppId.BIOM];
         }
-        const uid = await FirebaseService.createUser(json.email, json.password!, json.name, json.userType);
-        if(uid) {
-            json.uid = uid;
-            const user = new User(json);
-            const result = await user.save();
-            return result;
-        } else{
-            throw new Error('User creation failed');
+
+        if (json.password) {
+            json.password = await hashPassword(json.password);
         }
-        
+
+        const user = new User(json);
+        const result = await user.save();
+
+        // Set uid to the mongo _id string
+        result.uid = result._id.toString();
+        await result.save();
+
+        return result;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const loginUser = async (email: string, password: string) => {
+    try {
+        const user = await User.findOne({ email }).select('+password');
+        if (!user) {
+            throw new Error('Invalid email or password');
+        }
+
+        const isMatch = await comparePassword(password, user.password!);
+        if (!isMatch) {
+            throw new Error('Invalid email or password');
+        }
+
+        const token = generateToken({
+            uid: user.uid,
+            email: user.email,
+            userType: user.userType,
+        });
+
+        return { token, user: { uid: user.uid, name: user.name, email: user.email, userType: user.userType, appId: user.appId } };
     } catch (error) {
         throw error;
     }
@@ -43,20 +70,20 @@ export const getUsers = async (params: IUserFilterParams) => {
 const getFilterQuery = (params: IUserFilterParams) => {
     let query: any = {};
 
-    if(params.keyWord) {
-        query.name = { $regex: '^' + params.keyWord.trim(), $options: 'i' };
-        query.email = { $regex: '^' + params.keyWord.trim(), $options: 'i' };
+    if (params.keyWord) {
+        query.$or = [
+            { name: { $regex: '^' + params.keyWord.trim(), $options: 'i' } },
+            { email: { $regex: '^' + params.keyWord.trim(), $options: 'i' } }
+        ];
     }
-    if(params.uid) {
+    if (params.uid) {
         query.uid = params.uid;
     }
-    if(params.appId) {
+    if (params.appId) {
         query.appId = params.appId;
     }
-    if(params.nids && params.nids?.length > 0) {
-        query._id = {
-            $nin: params.nids
-        };
+    if (params.nids && params.nids?.length > 0) {
+        query._id = { $nin: params.nids };
     }
-    return query
+    return query;
 };
